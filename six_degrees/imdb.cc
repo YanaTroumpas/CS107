@@ -44,18 +44,6 @@ static int filmComp(const void *filmData, const void *arrayOffset)
   return strcmp(film->title, title);
 }
 
-int processPadding(const char* data) {
-  int padding = 0;
-  char c = *data;
-  while(c == '\0') {
-    data++;
-    padding++;
-    c = *data;
-  }
-  return padding;
-}
-
-
 imdb::imdb(const string& directory)
 {
   const string actorFileName = directory + "/" + kActorFileName;
@@ -88,31 +76,31 @@ bool imdb::getCredits(const string& player, vector<film>& films) const {
     return false;
   } 
 
-  int* found_offset = (int*) found;  
-  char* name = (char*)actorFile + *found_offset;
-  int name_len = player.size();
+  int* found_offset = (int*) found;    
+  size_t parsed_length = player.size() + sizeof(char);
+  // Add padding after name
+  if(parsed_length % 2 != 0){
+    parsed_length++;
+  }
   
-  name_len += processPadding(name + name_len);
-
   // Find the number of movies for each actor
-  void* actorInfo = (char*) actorFile + *found_offset + name_len*sizeof(char);
+  void* actorInfo = (char*) actorFile + *found_offset + parsed_length;
   short* num_movies = (short*) actorInfo;
-  cout << "Num movies: " << *num_movies << endl;
-  actorInfo = (short*) actorInfo + 1;
-
+  
   // skip padding after num of movies
-  int padding = processPadding((char*) actorInfo);
-  actorInfo = (char*) actorInfo + padding;
+  parsed_length += sizeof(short);
+  if(parsed_length % 4 != 0){
+    parsed_length += 2;
+  }
+
+  actorInfo = (char*) actorFile + *found_offset + parsed_length;
   
   for(int i = 0; i < *num_movies; i++) {
     int* movie_offset = (int*)actorInfo + i;
     char* movie = (char*) movieFile + *movie_offset;
     string movie_title(movie);
-    int title_len = movie_title.size();
-    
-    title_len += processPadding(movie + title_len);
-  
-    int year = *((char*) movieFile + *movie_offset + title_len + 1) + 1900;
+    size_t title_len = movie_title.size() + sizeof(char);
+    int year = *((char*) movieFile + *movie_offset + title_len) + 1900;
     films.push_back({movie_title, year});
   }
 
@@ -136,27 +124,27 @@ bool imdb::getCast(const film& movie, vector<string>& players) const {
     return false;
   }
 
-  int* found_offset = (int*) found;  
   // skip over title and year to get to the number of actors
-  char* filmInfo = (char*)movieFile + *found_offset + movie.title.size() + 2;
-  int padding = processPadding(filmInfo);
-
-  filmInfo = (char*) filmInfo + padding;
-  short* num_actors = (short*) filmInfo;
-  cout << "Num actors: " << *num_actors << endl;
-
-  void* castInfo = (short*) filmInfo + 1;
-
-  // skip padding after num of movies
-  char* actorList = (char*) castInfo;
-  padding = processPadding(actorList);
-
-  castInfo = (char*) castInfo + padding;
-
-  for(int i = 0; i < *num_actors; i++) {
-    int* actor_offset = (int*) castInfo + i;
-    players.push_back(string((char*) actorFile + *actor_offset));
+  size_t parsed_length = movie.title.size() + sizeof(byte) + sizeof(char);
+  if(parsed_length % 2 != 0){
+    parsed_length++;
   }
+
+  int* found_offset = (int*) found;  
+  void* filmInfo = (char*)movieFile + *found_offset + parsed_length;
+
+  short* num_actors = (short*) filmInfo;
+  parsed_length += sizeof(short);
+
+  if(parsed_length % 4 != 0){
+    parsed_length += 2;
+  }
+  
+  void* castInfo = (char*)movieFile + *found_offset + parsed_length;
+   for(int i = 0; i < *num_actors; i++) {
+     int* actor_offset = (int*) castInfo + i;
+     players.push_back(string((char*) actorFile + *actor_offset));
+   }
 
   return true; }
 
