@@ -7,7 +7,7 @@
 
 void VectorNew(vector *v, int elemSize, VectorFreeFunction freeFn, int initialAllocation)
 {
-    assert(initialAllocation > 0);
+    assert(initialAllocation >= 0);
 
     v->curr_len = 0;
     v->elem_size = elemSize;
